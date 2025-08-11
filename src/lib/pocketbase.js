@@ -24,22 +24,37 @@ export const auth = {
 	 * Redirect user based on their role
 	 */
 	redirectByRole(/** @type {any} */ user) {
-		if (!browser || !user) return;
+		if (!browser || !user) {
+			console.warn('Cannot redirect: browser context or user not available');
+			return;
+		}
 		
 		const role = user.role;
+		console.log('Redirecting user based on role:', { 
+			userEmail: user.email, 
+			role: role, 
+			userObject: user 
+		});
 		
-		switch (role) {
+		// Handle role-based redirection with case-insensitive comparison
+		const normalizedRole = role ? role.toLowerCase().trim() : '';
+		
+		switch (normalizedRole) {
 			case 'admin':
+				console.log('Redirecting admin user to /admin');
 				goto('/admin');
 				break;
 			case 'manager':
+				console.log('Redirecting manager user to /manager');
 				goto('/manager');
 				break;
 			case 'customer':
+				console.log('Redirecting customer user to /dashboard');
 				goto('/dashboard');
 				break;
 			default:
 				// If role is not recognized, default to dashboard
+				console.warn('Unknown role or no role found:', role, 'defaulting to /dashboard');
 				goto('/dashboard');
 				break;
 		}
@@ -56,8 +71,9 @@ export const auth = {
 		try {
 			// Generate a valid username from email (remove special characters and make unique)
 			const baseUsername = userData.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
-			const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
-			const username = baseUsername + timestamp;
+			const timestamp = Date.now().toString();
+			const randomSuffix = Math.random().toString(36).substring(2, 8);
+			const username = baseUsername + timestamp.slice(-6) + randomSuffix;
 
 			/** @type {any} */
 			const data = {
@@ -289,7 +305,8 @@ export const auth = {
 		if (!browser || !pb || !pb.authStore.model) {
 			return null;
 		}
-		return pb.authStore.model.role || 'customer';
+		const role = pb.authStore.model.role || 'customer';
+		return role.toLowerCase().trim();
 	},
 
 	/**
@@ -297,7 +314,7 @@ export const auth = {
 	 */
 	hasRole(/** @type {string} */ role) {
 		const currentRole = this.getCurrentUserRole();
-		return currentRole === role;
+		return currentRole === role.toLowerCase().trim();
 	},
 
 	/**

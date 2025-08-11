@@ -18,7 +18,7 @@
 		}
 	});
 
-	async function handleSubmit(event) {
+	async function handleSubmit(/** @type {Event} */ event) {
 		event.preventDefault();
 		loading = true;
 		error = '';
@@ -27,7 +27,7 @@
 			const result = await auth.signIn(email, password);
 			
 			if (!result.success) {
-				error = result.error;
+				error = result.error || 'Login failed';
 			}
 			// If successful, the auth service will handle navigation
 		} catch (err) {

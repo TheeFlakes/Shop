@@ -11,7 +11,14 @@
 <div class="flex h-screen bg-white">
     <!-- Mobile sidebar overlay -->
     {#if sidebarOpen}
-        <div class="fixed inset-0 z-40 bg-black bg-opacity-50 md:hidden" on:click={toggleSidebar} on:keydown={(e) => e.key === 'Escape' && toggleSidebar()}></div>
+        <div 
+            class="fixed inset-0 z-40 bg-black bg-opacity-50 md:hidden" 
+            on:click={toggleSidebar} 
+            on:keydown={(e) => e.key === 'Escape' && toggleSidebar()}
+            role="button"
+            tabindex="0"
+            aria-label="Close sidebar"
+        ></div>
     {/if}
     
     <!-- sidebar -->
@@ -19,7 +26,7 @@
         <div class="flex items-center justify-between h-16 bg-gray-900 px-4">
             <span class="text-white font-bold uppercase text-sm md:text-base">Daystar Dashboard</span>
             <!-- Close button for mobile -->
-            <button class="md:hidden text-white" on:click={toggleSidebar}>
+            <button class="md:hidden text-white" on:click={toggleSidebar} aria-label="Close sidebar">
                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -27,82 +34,7 @@
         </div>
         <div class="flex flex-col flex-1 overflow-y-auto">
             <nav class="flex-1 px-2 py-4 bg-gray-800">
-                <a href="#" class="flex items-center px-4 py-2 text-gray-100 hover:bg-gray-700">
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="h-6 w-6 mr-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                    >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z"
-                        />
-                    </svg>
-                    Baby Sitters
-                </a>
-                <a href="#" class="flex items-center px-4 py-2 mt-2 text-gray-100 hover:bg-gray-700">
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="h-6 w-6 mr-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                    >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"
-                        />
-                    </svg>
-                    Babies
-                </a>
-                <a
-                    href="#"
-                    class="flex items-center px-4 py-2 mt-2 text-gray-100 hover:bg-gray-700"
-                >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="h-6 w-6 mr-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                    >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605"
-                        />
-                    </svg>
-                    Procurement
-                </a>
-
-                <a
-                    href="#"
-                    class="flex items-center px-4 py-2 mt-2 text-gray-100 hover:bg-gray-700"
-                >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="h-6 w-6 mr-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                    >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z"
-                        />
-                    </svg>
-                    Transactions
-                </a>
-
-                <a
-                    href="#"
-                    class="flex items-center px-4 py-2 mt-2 text-gray-100 hover:bg-gray-700"
-                >
+                <a href="/manager" class="flex items-center px-4 py-2 text-gray-100 hover:bg-gray-700">
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         class="h-6 w-6 mr-2"
@@ -114,10 +46,79 @@
                             stroke-linecap="round"
                             stroke-linejoin="round"
                             stroke-width="2"
-                            d="M13 10V3L4 14h7v7l9-11h-7z"
+                            d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
+                        />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 21l4-4 4 4" />
+                    </svg>
+                    Dashboard
+                </a>
+                <a href="/manager/products" class="flex items-center px-4 py-2 mt-2 text-gray-100 hover:bg-gray-700">
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-6 w-6 mr-2"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
                         />
                     </svg>
-                    Settings
+                    Products
+                </a>
+                <a href="/manager/category" class="flex items-center px-4 py-2 mt-2 text-gray-100 hover:bg-gray-700">
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-6 w-6 mr-2"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                        />
+                    </svg>
+                    Categories
+                </a>
+                <a href="/manager/orders" class="flex items-center px-4 py-2 mt-2 text-gray-100 hover:bg-gray-700">
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-6 w-6 mr-2"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+                        />
+                    </svg>
+                    Orders
+                </a>
+                   <a href="/manager/crm" class="flex items-center px-4 py-2 mt-2 text-gray-100 hover:bg-gray-700">
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-6 w-6 mr-2"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+                        />
+                    </svg>
+                    CRM
                 </a>
 
                 <!-- Logout Button -->
@@ -146,7 +147,7 @@
     </div>
 
     <!-- Main content area -->
-    <div class="flex flex-col flex-1 overflow-hidden">
+    <div class="flex flex-col flex-1 overflow-y-auto">
         <!-- Mobile header with hamburger menu -->
         <div class="md:hidden flex items-center justify-between h-16 bg-white border-b border-gray-200 px-4">
             <button 
@@ -163,6 +164,8 @@
         </div>
         
         <!-- Page content -->
-        <slot />
+        <div class="flex-1 overflow-y-auto">
+            <slot />
+        </div>
     </div>
 </div>
