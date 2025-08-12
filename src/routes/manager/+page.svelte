@@ -28,6 +28,27 @@
 	/** @type {any[]} */
 	let categoryData = [];
 
+	// P/L Analysis data
+	/** @type {any[]} */
+	let orders = [];
+	/** @type {any[]} */
+	let returns = [];
+	let profitLossData = {
+		totalRevenue: 0,
+		totalCosts: 0,
+		grossProfit: 0,
+		grossProfitMargin: 0,
+		returnsCost: 0,
+		returnsRate: 0,
+		netProfit: 0,
+		netProfitMargin: 0,
+		totalOrdersCount: 0,
+		totalReturnsCount: 0,
+		averageOrderValue: 0,
+		revenueGrowth: 0,
+		profitGrowth: 0
+	};
+
 	async function fetchData() {
 		if (!pb) {
 			console.error('PocketBase not initialized');
@@ -49,6 +70,30 @@
 			});
 			products = productsResponse;
 
+			// Fetch orders data for P/L analysis
+			try {
+				const ordersResponse = await pb.collection('orders').getFullList({
+					expand: 'customer,items',
+					sort: '-created'
+				});
+				orders = ordersResponse;
+			} catch (error) {
+				console.warn('Could not fetch orders:', error);
+				orders = [];
+			}
+
+			// Fetch returns data for P/L analysis
+			try {
+				const returnsResponse = await pb.collection('returns').getFullList({
+					expand: 'order_id,product_id',
+					sort: '-created'
+				});
+				returns = returnsResponse;
+			} catch (error) {
+				console.warn('Could not fetch returns:', error);
+				returns = [];
+			}
+
 			// Fetch order items for top selling products analysis
 			try {
 				const orderItemsResponse = await pb.collection('order_items').getFullList({
@@ -61,6 +106,7 @@
 				orderItems = [];
 			}
 
+			calculateProfitLoss();
 			prepareChartData();
 			createCharts();
 		} catch (error) {
@@ -68,6 +114,131 @@
 		} finally {
 			chartsLoading = false;
 		}
+	}
+
+	function calculateProfitLoss() {
+		// Calculate current period (last 30 days) and previous period for growth comparison
+		const currentDate = new Date();
+		const currentPeriodStart = new Date(currentDate.getTime() - (30 * 24 * 60 * 60 * 1000));
+		const previousPeriodStart = new Date(currentDate.getTime() - (60 * 24 * 60 * 60 * 1000));
+		const previousPeriodEnd = currentPeriodStart;
+
+		// Filter orders for current and previous periods
+		const currentOrders = orders.filter(order => {
+			const orderDate = new Date(order.created);
+			return orderDate >= currentPeriodStart && order.status !== 'cancelled';
+		});
+
+		const previousOrders = orders.filter(order => {
+			const orderDate = new Date(order.created);
+			return orderDate >= previousPeriodStart && orderDate < previousPeriodEnd && order.status !== 'cancelled';
+		});
+
+		// Calculate revenue
+		const currentRevenue = currentOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+		const previousRevenue = previousOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+
+		// Calculate costs (estimated based on product cost or 60% of selling price if cost not available)
+		let totalCosts = 0;
+		const currentOrderItems = orderItems.filter(item => {
+			const order = orders.find(o => o.id === item.order_id);
+			if (!order) return false;
+			const orderDate = new Date(order.created);
+			return orderDate >= currentPeriodStart && order.status !== 'cancelled';
+		});
+
+		currentOrderItems.forEach(item => {
+			const product = products.find(p => p.id === item.product_id);
+			if (product) {
+				// Use product cost if available, otherwise estimate as 60% of selling price
+				const productCost = product.cost || (product.price * 0.6);
+				totalCosts += productCost * (item.quantity || 1);
+			}
+		});
+
+		// Calculate returns impact
+		const currentReturns = returns.filter(returnItem => {
+			const returnDate = new Date(returnItem.created);
+			return returnDate >= currentPeriodStart;
+		});
+
+		const returnsCost = currentReturns.reduce((sum, returnItem) => {
+			// Find the product to get its cost
+			const product = products.find(p => p.id === returnItem.product_id);
+			if (product) {
+				const productCost = product.cost || (product.price * 0.6);
+				return sum + (productCost * (returnItem.quantity || 1));
+			}
+			return sum;
+		}, 0);
+
+		const returnsRefund = currentReturns.reduce((sum, returnItem) => {
+			const product = products.find(p => p.id === returnItem.product_id);
+			if (product) {
+				return sum + (product.price * (returnItem.quantity || 1));
+			}
+			return sum;
+		}, 0);
+
+		// Calculate metrics
+		const grossProfit = currentRevenue - totalCosts;
+		const netRevenue = currentRevenue - returnsRefund; // Revenue after refunds
+		const netProfit = grossProfit - returnsCost; // Profit after returns impact
+		const grossProfitMargin = currentRevenue > 0 ? (grossProfit / currentRevenue) * 100 : 0;
+		const netProfitMargin = netRevenue > 0 ? (netProfit / netRevenue) * 100 : 0;
+		const returnsRate = currentOrders.length > 0 ? (currentReturns.length / currentOrders.length) * 100 : 0;
+		const averageOrderValue = currentOrders.length > 0 ? currentRevenue / currentOrders.length : 0;
+
+		// Calculate growth rates
+		const revenueGrowth = previousRevenue > 0 ? ((currentRevenue - previousRevenue) / previousRevenue) * 100 : 0;
+		
+		// Calculate previous period profit for growth comparison
+		const previousOrderItems = orderItems.filter(item => {
+			const order = orders.find(o => o.id === item.order_id);
+			if (!order) return false;
+			const orderDate = new Date(order.created);
+			return orderDate >= previousPeriodStart && orderDate < previousPeriodEnd && order.status !== 'cancelled';
+		});
+
+		let previousCosts = 0;
+		previousOrderItems.forEach(item => {
+			const product = products.find(p => p.id === item.product_id);
+			if (product) {
+				const productCost = product.cost || (product.price * 0.6);
+				previousCosts += productCost * (item.quantity || 1);
+			}
+		});
+
+		const previousProfit = previousRevenue - previousCosts;
+		const profitGrowth = previousProfit > 0 ? ((netProfit - previousProfit) / previousProfit) * 100 : 0;
+
+		// Update P/L data
+		profitLossData = {
+			totalRevenue: currentRevenue,
+			totalCosts: totalCosts,
+			grossProfit: grossProfit,
+			grossProfitMargin: grossProfitMargin,
+			returnsCost: returnsCost + returnsRefund, // Total impact of returns
+			returnsRate: returnsRate,
+			netProfit: netProfit,
+			netProfitMargin: netProfitMargin,
+			totalOrdersCount: currentOrders.length,
+			totalReturnsCount: currentReturns.length,
+			averageOrderValue: averageOrderValue,
+			revenueGrowth: revenueGrowth,
+			profitGrowth: profitGrowth
+		};
+
+		console.log('P/L Analysis:', profitLossData);
+	}
+
+	function formatCurrency(amount) {
+		return new Intl.NumberFormat('en-KE', {
+			style: 'currency',
+			currency: 'KES',
+			minimumFractionDigits: 0,
+			maximumFractionDigits: 0
+		}).format(amount);
 	}
 
 	function prepareChartData() {
@@ -351,6 +522,261 @@
 			<div class="mb-6">
 				<h1 class="text-2xl md:text-3xl font-bold text-gray-800">Manager Dashboard</h1>
 				<p class="mt-2 text-gray-600 text-sm md:text-base">Monitor inventory levels, sales performance, and product categories.</p>
+			</div>
+
+			<!-- Profit & Loss Analysis Section -->
+			<div class="mb-8">
+				<div class="mb-4">
+					<h2 class="text-xl font-bold text-gray-800 flex items-center">
+						<svg class="w-6 h-6 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+						</svg>
+						Profit & Loss Analysis (Last 30 Days)
+					</h2>
+					<p class="text-gray-600 text-sm">Comprehensive financial overview including returns impact</p>
+				</div>
+
+				<!-- P/L Metrics Grid -->
+				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+					<!-- Total Revenue -->
+					<div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-6 text-white">
+						<div class="flex items-center justify-between">
+							<div>
+								<h3 class="text-sm font-medium text-blue-100">Total Revenue</h3>
+								<p class="text-2xl font-bold">KSh {profitLossData.totalRevenue.toLocaleString()}</p>
+								<div class="flex items-center mt-2">
+									{#if profitLossData.revenueGrowth >= 0}
+										<svg class="w-4 h-4 text-green-300 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+										</svg>
+										<span class="text-green-300 text-sm">+{profitLossData.revenueGrowth.toFixed(1)}%</span>
+									{:else}
+										<svg class="w-4 h-4 text-red-300 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
+										</svg>
+										<span class="text-red-300 text-sm">{profitLossData.revenueGrowth.toFixed(1)}%</span>
+									{/if}
+								</div>
+							</div>
+							<svg class="w-8 h-8 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+							</svg>
+						</div>
+					</div>
+
+					<!-- Gross Profit -->
+					<div class="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-6 text-white">
+						<div class="flex items-center justify-between">
+							<div>
+								<h3 class="text-sm font-medium text-green-100">Gross Profit</h3>
+								<p class="text-2xl font-bold">KSh {profitLossData.grossProfit.toLocaleString()}</p>
+								<div class="flex items-center mt-2">
+									<span class="text-green-100 text-sm">{profitLossData.grossProfitMargin.toFixed(1)}% margin</span>
+								</div>
+							</div>
+							<svg class="w-8 h-8 text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path>
+							</svg>
+						</div>
+					</div>
+
+					<!-- Net Profit -->
+					<div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg p-6 text-white">
+						<div class="flex items-center justify-between">
+							<div>
+								<h3 class="text-sm font-medium text-purple-100">Net Profit</h3>
+								<p class="text-2xl font-bold">KSh {profitLossData.netProfit.toLocaleString()}</p>
+								<div class="flex items-center mt-2">
+									{#if profitLossData.profitGrowth >= 0}
+										<svg class="w-4 h-4 text-green-300 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+										</svg>
+										<span class="text-green-300 text-sm">+{profitLossData.profitGrowth.toFixed(1)}%</span>
+									{:else}
+										<svg class="w-4 h-4 text-red-300 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
+										</svg>
+										<span class="text-red-300 text-sm">{profitLossData.profitGrowth.toFixed(1)}%</span>
+									{/if}
+								</div>
+							</div>
+							<svg class="w-8 h-8 text-purple-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+							</svg>
+						</div>
+					</div>
+
+					<!-- Returns Impact -->
+					<div class="bg-gradient-to-r from-red-500 to-red-600 rounded-lg p-6 text-white">
+						<div class="flex items-center justify-between">
+							<div>
+								<h3 class="text-sm font-medium text-red-100">Returns Impact</h3>
+								<p class="text-2xl font-bold">KSh {profitLossData.returnsCost.toLocaleString()}</p>
+								<div class="flex items-center mt-2">
+									<span class="text-red-100 text-sm">{profitLossData.returnsRate.toFixed(1)}% return rate</span>
+								</div>
+							</div>
+							<svg class="w-8 h-8 text-red-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z"></path>
+							</svg>
+						</div>
+					</div>
+				</div>
+
+				<!-- Additional P/L Metrics -->
+				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+					<!-- Total Orders -->
+					<div class="bg-white border border-gray-200 rounded-lg p-4">
+						<div class="flex items-center">
+							<div class="p-2 bg-blue-100 rounded-lg">
+								<svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+								</svg>
+							</div>
+							<div class="ml-4">
+								<p class="text-sm font-medium text-gray-600">Total Orders</p>
+								<p class="text-2xl font-semibold text-gray-900">{profitLossData.totalOrdersCount}</p>
+							</div>
+						</div>
+					</div>
+
+					<!-- Average Order Value -->
+					<div class="bg-white border border-gray-200 rounded-lg p-4">
+						<div class="flex items-center">
+							<div class="p-2 bg-green-100 rounded-lg">
+								<svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path>
+								</svg>
+							</div>
+							<div class="ml-4">
+								<p class="text-sm font-medium text-gray-600">Avg Order Value</p>
+								<p class="text-2xl font-semibold text-gray-900">KSh {profitLossData.averageOrderValue.toLocaleString()}</p>
+							</div>
+						</div>
+					</div>
+
+					<!-- Total Returns -->
+					<div class="bg-white border border-gray-200 rounded-lg p-4">
+						<div class="flex items-center">
+							<div class="p-2 bg-red-100 rounded-lg">
+								<svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3"></path>
+								</svg>
+							</div>
+							<div class="ml-4">
+								<p class="text-sm font-medium text-gray-600">Total Returns</p>
+								<p class="text-2xl font-semibold text-gray-900">{profitLossData.totalReturnsCount}</p>
+							</div>
+						</div>
+					</div>
+
+					<!-- Net Profit Margin -->
+					<div class="bg-white border border-gray-200 rounded-lg p-4">
+						<div class="flex items-center">
+							<div class="p-2 bg-purple-100 rounded-lg">
+								<svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+								</svg>
+							</div>
+							<div class="ml-4">
+								<p class="text-sm font-medium text-gray-600">Net Margin</p>
+								<p class="text-2xl font-semibold text-gray-900">{profitLossData.netProfitMargin.toFixed(1)}%</p>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Detailed P/L Breakdown -->
+				<div class="bg-white rounded-lg shadow-lg border border-gray-100 p-6 mb-6">
+					<h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+						<svg class="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+						</svg>
+						Profit & Loss Statement (Last 30 Days)
+					</h3>
+					
+					<div class="overflow-x-auto">
+						<table class="w-full">
+							<tbody class="divide-y divide-gray-200">
+								<tr class="hover:bg-gray-50">
+									<td class="py-3 px-4 text-sm font-medium text-gray-900">Total Revenue</td>
+									<td class="py-3 px-4 text-sm text-right font-semibold text-green-600">
+										KSh {profitLossData.totalRevenue.toLocaleString()}
+									</td>
+								</tr>
+								<tr class="hover:bg-gray-50">
+									<td class="py-3 px-4 text-sm text-gray-700 pl-8">- Cost of Goods Sold</td>
+									<td class="py-3 px-4 text-sm text-right text-red-600">
+										(KSh {profitLossData.totalCosts.toLocaleString()})
+									</td>
+								</tr>
+								<tr class="hover:bg-gray-50 border-t-2 border-gray-300">
+									<td class="py-3 px-4 text-sm font-semibold text-gray-900">Gross Profit</td>
+									<td class="py-3 px-4 text-sm text-right font-semibold text-blue-600">
+										KSh {profitLossData.grossProfit.toLocaleString()}
+									</td>
+								</tr>
+								<tr class="hover:bg-gray-50">
+									<td class="py-3 px-4 text-sm text-gray-700 pl-8">Gross Margin</td>
+									<td class="py-3 px-4 text-sm text-right text-gray-600">
+										{profitLossData.grossProfitMargin.toFixed(1)}%
+									</td>
+								</tr>
+								<tr class="hover:bg-gray-50">
+									<td class="py-3 px-4 text-sm text-gray-700 pl-8">- Returns & Refunds</td>
+									<td class="py-3 px-4 text-sm text-right text-red-600">
+										(KSh {profitLossData.returnsCost.toLocaleString()})
+									</td>
+								</tr>
+								<tr class="hover:bg-gray-50 border-t-2 border-gray-900 bg-gray-50">
+									<td class="py-4 px-4 text-base font-bold text-gray-900">Net Profit</td>
+									<td class="py-4 px-4 text-base text-right font-bold {profitLossData.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}">
+										KSh {profitLossData.netProfit.toLocaleString()}
+									</td>
+								</tr>
+								<tr class="hover:bg-gray-50">
+									<td class="py-3 px-4 text-sm text-gray-700 pl-8">Net Margin</td>
+									<td class="py-3 px-4 text-sm text-right font-semibold {profitLossData.netProfitMargin >= 0 ? 'text-green-600' : 'text-red-600'}">
+										{profitLossData.netProfitMargin.toFixed(1)}%
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+
+					<!-- Key Insights -->
+					<div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+							<h4 class="text-sm font-semibold text-blue-800 mb-2">Revenue Analysis</h4>
+							<div class="space-y-1">
+								<p class="text-xs text-blue-700">
+									• {profitLossData.totalOrdersCount} orders in the last 30 days
+								</p>
+								<p class="text-xs text-blue-700">
+									• Average order value: KSh {profitLossData.averageOrderValue.toLocaleString()}
+								</p>
+								<p class="text-xs text-blue-700">
+									• Revenue growth: {profitLossData.revenueGrowth >= 0 ? '+' : ''}{profitLossData.revenueGrowth.toFixed(1)}% vs previous period
+								</p>
+							</div>
+						</div>
+
+						<div class="bg-red-50 border border-red-200 rounded-lg p-4">
+							<h4 class="text-sm font-semibold text-red-800 mb-2">Returns Analysis</h4>
+							<div class="space-y-1">
+								<p class="text-xs text-red-700">
+									• {profitLossData.totalReturnsCount} returns processed
+								</p>
+								<p class="text-xs text-red-700">
+									• Return rate: {profitLossData.returnsRate.toFixed(1)}% of total orders
+								</p>
+								<p class="text-xs text-red-700">
+									• Total returns impact: KSh {profitLossData.returnsCost.toLocaleString()}
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
 			</div>
 			
 			<!-- Charts Grid -->
