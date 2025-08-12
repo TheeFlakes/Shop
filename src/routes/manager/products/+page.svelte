@@ -34,7 +34,9 @@
 		price: '',
 		category: '',
 		stock: '',
-		images: null
+		images: null,
+		discount: 0,
+		is_featured: false
 	};
 	
 	// Form data for new/edit variant
@@ -299,7 +301,9 @@
 			price: product.price.toString(),
 			category: product.category_id, // Using correct field name
 			stock: product.stock.toString(),
-			images: null
+			images: null,
+			discount: product.discount || 0,
+			is_featured: product.is_featured || false
 		};
 		
 		// Set image preview if product has images
@@ -377,7 +381,9 @@
 			price: '',
 			category: '',
 			stock: '',
-			images: null
+			images: null,
+			discount: 0,
+			is_featured: false
 		};
 	}
 	
@@ -416,7 +422,9 @@
 				name: productForm.name.trim(),
 				description: productForm.description.trim(),
 				price: parseFloat(productForm.price),
-				stock: parseInt(productForm.stock)
+				stock: parseInt(productForm.stock),
+				discount: parseInt(productForm.discount) || 0,
+				is_featured: productForm.is_featured || false
 			};
 			
 			// Only add category_id if it has a value
@@ -548,6 +556,15 @@
 			style: 'currency',
 			currency: 'KES'
 		}).format(price);
+	}
+
+	function calculateDiscountedPrice(originalPrice, discount) {
+		if (!discount || discount <= 0) return originalPrice;
+		return originalPrice - (originalPrice * (discount / 100));
+	}
+
+	function hasDiscount(product) {
+		return product.discount && product.discount > 0;
 	}
 	
 	function getProductVariants(productId) {
@@ -883,10 +900,30 @@
 						{/if}
 						
 						<div class="flex-1 min-w-0">
-							<h3 class="font-medium text-gray-900 truncate">{product.name}</h3>
+							<div class="flex items-center gap-2">
+								<h3 class="font-medium text-gray-900 truncate">{product.name}</h3>
+								{#if product.is_featured}
+									<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+										<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+											<path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+										</svg>
+										Featured
+									</span>
+								{/if}
+							</div>
 							<p class="text-sm text-gray-600 mt-1 line-clamp-2">{product.description}</p>
 							<div class="flex items-center gap-4 mt-2">
-								<span class="text-lg font-semibold text-green-600">{formatPrice(product.price)}</span>
+								{#if hasDiscount(product)}
+									<div class="flex items-center gap-2">
+										<span class="text-lg font-semibold text-green-600">{formatPrice(calculateDiscountedPrice(product.price, product.discount))}</span>
+										<span class="text-sm text-gray-500 line-through">{formatPrice(product.price)}</span>
+										<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+											{product.discount}% OFF
+										</span>
+									</div>
+								{:else}
+									<span class="text-lg font-semibold text-green-600">{formatPrice(product.price)}</span>
+								{/if}
 								<div class="flex items-center gap-2">
 									<span class="text-sm text-gray-500">Stock: {product.stock}</span>
 									{#if (product.stock || 0) === 0}
@@ -963,13 +1000,35 @@
 											</div>
 										{/if}
 										<div class="min-w-0 flex-1">
-											<div class="text-sm font-medium text-gray-900 truncate">{product.name}</div>
+											<div class="flex items-center gap-2">
+												<div class="text-sm font-medium text-gray-900 truncate">{product.name}</div>
+												{#if product.is_featured}
+													<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+														<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+															<path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+														</svg>
+														Featured
+													</span>
+												{/if}
+											</div>
 											<div class="text-sm text-gray-500 truncate max-w-xs">{product.description}</div>
 										</div>
 									</div>
 								</td>
-								<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-									{formatPrice(product.price)}
+								<td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+									{#if hasDiscount(product)}
+										<div class="flex flex-col">
+											<span class="text-green-600 font-semibold">{formatPrice(calculateDiscountedPrice(product.price, product.discount))}</span>
+											<div class="flex items-center gap-2">
+												<span class="text-gray-500 line-through text-xs">{formatPrice(product.price)}</span>
+												<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+													{product.discount}% OFF
+												</span>
+											</div>
+										</div>
+									{:else}
+										<span class="text-green-600">{formatPrice(product.price)}</span>
+									{/if}
 								</td>
 								<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
 									<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {product.stock > 10 ? 'bg-green-100 text-green-800' : product.stock > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}">
@@ -1072,6 +1131,22 @@
 								</div>
 								
 								<div>
+									<label for="discount" class="block text-sm font-medium text-gray-700">Discount (%)</label>
+									<input
+										type="number"
+										id="discount"
+										bind:value={productForm.discount}
+										min="0"
+										max="100"
+										step="1"
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+									/>
+									<p class="text-xs text-gray-500 mt-1">Enter percentage discount (0-100)</p>
+								</div>
+							</div>
+							
+							<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+								<div>
 									<label for="stock" class="block text-sm font-medium text-gray-700">Stock Quantity</label>
 									<input
 										type="number"
@@ -1081,6 +1156,22 @@
 										required
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
 									/>
+								</div>
+								
+								<div>
+									<label class="block text-sm font-medium text-gray-700 mb-2">Featured Product</label>
+									<div class="flex items-center">
+										<label class="relative inline-flex items-center cursor-pointer">
+											<input
+												type="checkbox"
+												bind:checked={productForm.is_featured}
+												class="sr-only peer"
+											/>
+											<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+											<span class="ml-3 text-sm text-gray-700">Mark as featured</span>
+										</label>
+									</div>
+									<p class="text-xs text-gray-500 mt-1">Featured products are highlighted to customers</p>
 								</div>
 							</div>
 							
@@ -1195,6 +1286,22 @@
 								</div>
 								
 								<div>
+									<label for="edit-discount" class="block text-sm font-medium text-gray-700">Discount (%)</label>
+									<input
+										type="number"
+										id="edit-discount"
+										bind:value={productForm.discount}
+										min="0"
+										max="100"
+										step="1"
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+									/>
+									<p class="text-xs text-gray-500 mt-1">Enter percentage discount (0-100)</p>
+								</div>
+							</div>
+							
+							<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+								<div>
 									<label for="edit-stock" class="block text-sm font-medium text-gray-700">Stock Quantity</label>
 									<input
 										type="number"
@@ -1204,6 +1311,22 @@
 										required
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
 									/>
+								</div>
+								
+								<div>
+									<label class="block text-sm font-medium text-gray-700 mb-2">Featured Product</label>
+									<div class="flex items-center">
+										<label class="relative inline-flex items-center cursor-pointer">
+											<input
+												type="checkbox"
+												bind:checked={productForm.is_featured}
+												class="sr-only peer"
+											/>
+											<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+											<span class="ml-3 text-sm text-gray-700">Mark as featured</span>
+										</label>
+									</div>
+									<p class="text-xs text-gray-500 mt-1">Featured products are highlighted to customers</p>
 								</div>
 							</div>
 							

@@ -11,6 +11,8 @@
 	let products = [];
 	/** @type {any[]} */
 	let orderItems = [];
+	/** @type {any[]} */
+	let categories = [];
 	/** @type {any} */
 	let stockChart;
 	/** @type {any} */
@@ -34,6 +36,12 @@
 		
 		chartsLoading = true;
 		try {
+			// Fetch categories data
+			const categoriesResponse = await pb.collection('categories').getFullList({
+				sort: '-created'
+			});
+			categories = categoriesResponse;
+
 			// Fetch products data
 			const productsResponse = await pb.collection('products').getFullList({
 				expand: 'category_id',
@@ -44,7 +52,7 @@
 			// Fetch order items for top selling products analysis
 			try {
 				const orderItemsResponse = await pb.collection('order_items').getFullList({
-					expand: 'product_id',
+					expand: 'product_id,order_id',
 					sort: '-created'
 				});
 				orderItems = orderItemsResponse;
@@ -92,12 +100,25 @@
 			.sort((a, b) => b.quantity - a.quantity)
 			.slice(0, 10); // Top 10 products
 
-		// Prepare category distribution data
+		// Prepare category distribution data using dedicated categories collection
 		/** @type {Record<string, number>} */
 		const categoryCount = {};
+		
+		// Initialize all categories with 0 count
+		categories.forEach(category => {
+			if (category.is_active) {
+				categoryCount[category.name] = 0;
+			}
+		});
+		
+		// Count products in each category
 		products.forEach(product => {
 			const categoryName = product.expand?.category_id?.name || 'Uncategorized';
-			categoryCount[categoryName] = (categoryCount[categoryName] || 0) + 1;
+			if (categoryCount.hasOwnProperty(categoryName)) {
+				categoryCount[categoryName]++;
+			} else {
+				categoryCount['Uncategorized'] = (categoryCount['Uncategorized'] || 0) + 1;
+			}
 		});
 
 		categoryData = Object.entries(categoryCount).map(([name, count]) => ({
@@ -261,7 +282,25 @@
 						},
 						legend: {
 							position: 'bottom'
+						},
+						tooltip: {
+							callbacks: {
+								label: function(context) {
+									const label = context.label || '';
+									const count = context.parsed || 0;
+									const total = context.dataset.data.reduce((a, b) => a + b, 0);
+									const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+									return `${label}: ${count} products (${percentage}%)`;
+								}
+							}
 						}
+					},
+					interaction: {
+						intersect: false,
+						mode: 'index'
+					},
+					onHover: (event, activeElements) => {
+						event.native.target.style.cursor = activeElements.length > 0 ? 'pointer' : 'default';
 					}
 				}
 			});
@@ -308,33 +347,10 @@
 {:else}
 	<!-- Main content -->
 	<div class="flex flex-col flex-1 overflow-y-auto bg-white">
-		<!-- Desktop header -->
-		<div class="hidden md:flex items-center justify-between h-16 bg-white border-b border-gray-200">
-			<div class="flex items-center px-4 flex-1">
-				<input class="mx-4 w-full max-w-md border rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" type="text" placeholder="Search">
-			</div>
-			<div class="flex items-center pr-4">
-				<button
-					class="flex items-center text-gray-500 hover:text-gray-700 focus:outline-none focus:text-gray-700 bg-gray-100/80 backdrop-blur-md px-3 py-2 rounded-lg"
-					aria-label="Navigation options">
-					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
-						stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-							d="M12 19l-7-7 7-7m5 14l7-7-7-7" />
-					</svg>
-				</button>
-			</div>
-		</div>
-		
 		<div class="p-4 md:p-6 lg:p-8">
 			<div class="mb-6">
 				<h1 class="text-2xl md:text-3xl font-bold text-gray-800">Manager Dashboard</h1>
 				<p class="mt-2 text-gray-600 text-sm md:text-base">Monitor inventory levels, sales performance, and product categories.</p>
-			</div>
-			
-			<!-- Mobile search bar -->
-			<div class="md:hidden mb-6">
-				<input class="w-full border rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500" type="text" placeholder="Search products...">
 			</div>
 			
 			<!-- Charts Grid -->
@@ -393,32 +409,32 @@
 				<div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-6 text-white">
 						<h3 class="text-lg font-semibold mb-2">Total Products</h3>
-						<p class="text-3xl font-bold">{products.length}</p>
+						<p class="text-3xl font-bold">{products ? products.length : 0}</p>
 						<p class="text-blue-100 text-sm mt-2">Active products in inventory</p>
 					</div>
 
 					<div class="bg-gradient-to-r from-red-500 to-red-600 rounded-lg p-6 text-white">
 						<h3 class="text-lg font-semibold mb-2">Low Stock Items</h3>
-						<p class="text-3xl font-bold">{stockChartData.filter(item => item.isLowStock).length}</p>
+						<p class="text-3xl font-bold">{stockChartData ? stockChartData.filter(item => item.isLowStock).length : 0}</p>
 						<p class="text-red-100 text-sm mt-2">Products below alert level</p>
 					</div>
 
 					<div class="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-6 text-white">
 						<h3 class="text-lg font-semibold mb-2">Total Categories</h3>
-						<p class="text-3xl font-bold">{categoryData.length}</p>
-						<p class="text-green-100 text-sm mt-2">Product categories</p>
+						<p class="text-3xl font-bold">{categories ? categories.filter(cat => cat.is_active).length : 0}</p>
+						<p class="text-green-100 text-sm mt-2">Active product categories</p>
 					</div>
 
 					<div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg p-6 text-white">
 						<h3 class="text-lg font-semibold mb-2">Order Items</h3>
-						<p class="text-3xl font-bold">{orderItems.length}</p>
+						<p class="text-3xl font-bold">{orderItems ? orderItems.length : 0}</p>
 						<p class="text-purple-100 text-sm mt-2">Total items ordered</p>
 					</div>
 				</div>
 			</div>
 
 			<!-- Quick Actions -->
-			<div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+			<div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
 				<button 
 					on:click={fetchData}
 					class="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg transition duration-200 font-medium">
@@ -438,15 +454,6 @@
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
 						</svg>
 						Add Product
-					</div>
-				</button>
-
-				<button class="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-lg transition duration-200 font-medium">
-					<div class="flex items-center justify-center">
-						<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-						</svg>
-						Export Report
 					</div>
 				</button>
 			</div>
